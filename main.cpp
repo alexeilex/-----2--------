@@ -157,33 +157,48 @@ double power_max(const SparseMatrix& A, int maxIter = 200, double tol = 1e-5) {
 }
 
 // Наименьшее собственное значение через сдвиг beta I - A
-double power_min_shifted(const SparseMatrix& A, double lambda_max, int maxIter = 2000, double tol = 1e-8) {
+double power_min_shifted(const SparseMatrix& A,
+                         double lambda_max,
+                         int maxIter = 2000,
+                         double tol = 1e-8)
+{
     int n = A.n;
-    double beta = lambda_max*2.0;  // безопасный сдвиг
+    double beta = 2.0 * lambda_max;   // сдвиг
     vector<double> x(n, 1.0);
     normalize(x);
 
-    double lambdaB_prev = 0.0, lambdaB = 0.0;
-    vector<double> Ax(n); // зарезервируем
+    double lambdaB_prev = 0.0;
+    double lambdaB = 0.0;
 
     for (int it = 0; it < maxIter; ++it) {
         cout << "PowerMin Iteration: " << it << endl;
-        Ax = A.matvec(x);
+
+        // Bx = beta*x - A*x
+        vector<double> Ax = A.matvec(x);
         vector<double> y(n);
-        for (int i = 0; i < n; ++i) y[i] = beta * x[i] - Ax[i];
+        for (int i = 0; i < n; ++i)
+            y[i] = beta * x[i] - Ax[i];
 
         double ny = norm2(y);
-        for (int i = 0; i < n; ++i) x[i] = y[i] / ny;
+        if (ny == 0.0) return 0.0;
 
-        // Рэлея для B = beta I - A: x^T B x = beta - x^T A x
-        double Ax_norm = dotp(x, Ax);   // x^T A x для текущего x (после нормировки)
-        lambdaB = beta - Ax_norm;
+        // новый вектор
+        for (int i = 0; i < n; ++i)
+            x[i] = y[i] / ny;
+
+        // теперь считаем Rayleigh уже для НОВОГО x
+        Ax = A.matvec(x);
+        lambdaB = beta - dotp(x, Ax);   // x нормирован, значит x^T B x = beta - x^T A x
+
         double pogr = fabs(lambdaB - lambdaB_prev) / (fabs(lambdaB) + 1e-15);
-        cout <<"pogr is " << pogr << endl;
-       // if (it > 0 && pogr < tol) //тут убрал чтобы отработало по всем итерациям
-        //    break;
+        cout << "pogr is " << pogr << endl;
+
         lambdaB_prev = lambdaB;
+
+        //if (it > 0 && pogr < tol)
+          //  break;
     }
+
     return beta - lambdaB;  // λ_min = β - λ_B
 }
 
