@@ -173,7 +173,6 @@ double power_min_shifted(const SparseMatrix& A, double lambda_max, int maxIter =
         for (int i = 0; i < n; ++i) y[i] = beta * x[i] - Ax[i];
 
         double ny = norm2(y);
-        if (ny < 1e-12) return beta;  // коллапс спектра (маловероятно)
         for (int i = 0; i < n; ++i) x[i] = y[i] / ny;
 
         // Рэлея для B = beta I - A: x^T B x = beta - x^T A x
@@ -203,13 +202,11 @@ struct System {
     SparseMatrix A;
     vector<double> F;
 };
-
 System buildSystem(double a, double b,
                    double lx, double rx,
                    double ly, double ry,
                    int nx, int ny)
 {
-    // nx, ny — число внутренних узлов
     int N = nx * ny;
     SparseMatrix A(N);
     vector<double> F(N, 0.0);
@@ -222,7 +219,6 @@ System buildSystem(double a, double b,
     double diag = 2.0 * ax + 2.0 * by;
 
     auto id = [nx](int i, int j) {
-        // i = 1..nx, j = 1..ny
         return (j - 1) * nx + (i - 1);
     };
 
@@ -232,25 +228,47 @@ System buildSystem(double a, double b,
             double x = lx + i * hx;
             int p = id(i, j);
 
-            // diagonal
+            // диагональ
             A.add(p, p, diag);
 
-            // source
+            // правая часть
             F[p] = source_f(a, b, x, y);
 
-            // left/right in x
-            if (i > 1) A.add(p, id(i - 1, j), -ax);
-            else       F[p] += ax * exact_u(lx, y);
+            // левый сосед (по x)
+            if (i > 1) {
+                int left = id(i-1, j);
+                A.add(p, left, -ax);
+                A.add(left, p, -ax);   // симметричный элемент
+            } else {
+                F[p] += ax * exact_u(lx, y);
+            }
 
-            if (i < nx) A.add(p, id(i + 1, j), -ax);
-            else        F[p] += ax * exact_u(rx, y);
+            // правый сосед (по x)
+            if (i < nx) {
+                int right = id(i+1, j);
+                A.add(p, right, -ax);
+                A.add(right, p, -ax);
+            } else {
+                F[p] += ax * exact_u(rx, y);
+            }
 
-            // down/up in y
-            if (j > 1) A.add(p, id(i, j - 1), -by);
-            else       F[p] += by * exact_u(x, ly);
+            // нижний сосед (по y)
+            if (j > 1) {
+                int down = id(i, j-1);
+                A.add(p, down, -by);
+                A.add(down, p, -by);
+            } else {
+                F[p] += by * exact_u(x, ly);
+            }
 
-            if (j < ny) A.add(p, id(i, j + 1), -by);
-            else        F[p] += by * exact_u(x, ry);
+            // верхний сосед (по y)
+            if (j < ny) {
+                int up = id(i, j+1);
+                A.add(p, up, -by);
+                A.add(up, p, -by);
+            } else {
+                F[p] += by * exact_u(x, ry);
+            }
         }
     }
 
