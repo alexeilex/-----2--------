@@ -377,8 +377,8 @@ cout << "lambda min time "
 vector<double> richardson(const SparseMatrix& A,
                           const vector<double>& b,
                           double tau,
-                          double tol = 1e-8,
-                          int maxIter = 50000)
+                          double tol = 1e-5,
+                          int maxIter = 10000)
 {
     int n = A.n;
     vector<double> x(n, 0.0);
@@ -397,7 +397,7 @@ vector<double> richardson(const SparseMatrix& A,
                  << " iterations, rel. residual " << nr / b_norm << endl;
             break;
         }
-
+   //     if(iter%100==0) cout << iter << ", residual = " << nr / b_norm << endl;
         for (int i = 0; i < n; ++i)
             x[i] += tau * r[i];
     }
@@ -428,7 +428,7 @@ int main() {
 cout << "tau_opt = " << tau_opt << endl;
 
 auto t_start = chrono::steady_clock::now();
-vector<double> z = richardson(sys.A, sys.F, tau_opt, 1e-4);
+vector<double> z = richardson(sys.A, sys.F, tau_opt, 1e-3);
 auto dt_solve = chrono::steady_clock::now() - t_start;
 cout << "Richardson solve time: "
      << chrono::duration<double>(dt_solve).count() << " sec" << endl;
