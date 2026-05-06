@@ -378,14 +378,18 @@ vector<double> richardson(const SparseMatrix& A,
                           const vector<double>& b,
                           double tau,
                           double tol = 1e-5,
-                          int maxIter = 10000)
+                          int maxIter = 30000)
 {
     int n = A.n;
     vector<double> x(n, 0.0);
     vector<double> r(n);
     double b_norm = sqrt(dotp(b, b));
     if (b_norm == 0.0) b_norm = 1.0;
+        vector<double> Ax = A.matvec(x);
+        for (int i = 0; i < n; ++i)
+            r[i] = b[i] - Ax[i];
 
+        double nr = sqrt(dotp(r, r));
     for (int iter = 0; iter < maxIter; ++iter) {
         vector<double> Ax = A.matvec(x);
         for (int i = 0; i < n; ++i)
@@ -401,6 +405,8 @@ vector<double> richardson(const SparseMatrix& A,
         for (int i = 0; i < n; ++i)
             x[i] += tau * r[i];
     }
+    cout << "Richardson converged in " << maxIter
+                 << " iterations, rel. residual " << nr / b_norm << endl;
     return x;
 }
 
@@ -432,6 +438,32 @@ vector<double> z = richardson(sys.A, sys.F, tau_opt, 1e-3);
 auto dt_solve = chrono::steady_clock::now() - t_start;
 cout << "Richardson solve time: "
      << chrono::duration<double>(dt_solve).count() << " sec" << endl;
+
+
+
+// Сетка
+double hx = (rx - lx) / (nx + 1);
+double hy = (ry - ly) / (ny + 1);
+
+// Запись всех узлов для 3D графика
+ofstream f3d("solution_3d.csv");
+f3d << "x,y,numerical,exact\n";
+f3d << setprecision(12) << fixed;
+for (int j = 1; j <= ny; ++j) {
+    double y = ly + j * hy;
+    for (int i = 1; i <= nx; ++i) {
+        double x = lx + i * hx;
+        int idx = (j - 1) * nx + (i - 1);
+        f3d << x << "," << y << ","
+            << z[idx] << ","
+            << exact_u(x, y) << "\n";
+    }
+}
+f3d.close();
+cout << "3D solution data saved to solution_3d.csv\n";
+
+
+
 
     return 0;
 }
