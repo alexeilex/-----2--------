@@ -130,7 +130,7 @@ static double rayleigh(const SparseMatrix& A, const vector<double>& x) {
 }
 
 // Наибольшее собственное значение
-double power_max(const SparseMatrix& A, int maxIter = 200, double tol = 1e-5) {
+double power_max(const SparseMatrix& A, int maxIter = 2000, double tol = 1e-8) {
     int n = A.n;
     vector<double> x(n, 1.0);
     normalize(x);
@@ -138,7 +138,7 @@ double power_max(const SparseMatrix& A, int maxIter = 200, double tol = 1e-5) {
     double lambda_prev = 0.0, lambda = 0.0;
 
     for (int it = 0; it < maxIter; ++it) {
-        cout << "PowerMax Iteration: " << it << endl;
+     //   cout << "PowerMax Iteration: " << it << endl;
         vector<double> y = A.matvec(x);
         double ny = norm2(y);
         if (ny == 0.0) return 0.0;
@@ -147,9 +147,12 @@ double power_max(const SparseMatrix& A, int maxIter = 200, double tol = 1e-5) {
 
         lambda = rayleigh(A, x);
         double pogr=fabs(lambda - lambda_prev) / (fabs(lambda) + 1e-15);
-        cout << "pogr is " << pogr << endl;
-        if (it > 0 && pogr < tol)
+    //    cout << "pogr is " << pogr << endl;
+        if (it > 0 && pogr < tol) {
+            cout << "iters " << it << endl;
             break;
+
+        }
 
         lambda_prev = lambda;
     }
@@ -163,43 +166,43 @@ double power_min_shifted(const SparseMatrix& A,
                          double tol = 1e-8)
 {
     int n = A.n;
-    double beta = 2.0 * lambda_max;   // сдвиг
+    double beta = lambda_max * 2.0;
     vector<double> x(n, 1.0);
     normalize(x);
 
-    double lambdaB_prev = 0.0;
     double lambdaB = 0.0;
+    vector<double> Ax(n), y(n), r(n);
 
     for (int it = 0; it < maxIter; ++it) {
-        cout << "PowerMin Iteration: " << it << endl;
+     //   cout << "PowerMin Iteration: " << it << endl;
 
         // Bx = beta*x - A*x
-        vector<double> Ax = A.matvec(x);
-        vector<double> y(n);
-        for (int i = 0; i < n; ++i)
-            y[i] = beta * x[i] - Ax[i];
+        Ax = A.matvec(x);
+        for (int i = 0; i < n; ++i) y[i] = beta * x[i] - Ax[i];
 
         double ny = norm2(y);
         if (ny == 0.0) return 0.0;
 
-        // новый вектор
-        for (int i = 0; i < n; ++i)
-            x[i] = y[i] / ny;
+        for (int i = 0; i < n; ++i) x[i] = y[i] / ny;
 
-        // теперь считаем Rayleigh уже для НОВОГО x
+        // теперь считаем lambda для A на новом x
         Ax = A.matvec(x);
-        lambdaB = beta - dotp(x, Ax);   // x нормирован, значит x^T B x = beta - x^T A x
+        double lambdaA = dotp(x, Ax);
 
-        double pogr = fabs(lambdaB - lambdaB_prev) / (fabs(lambdaB) + 1e-15);
-        cout << "pogr is " << pogr << endl;
+        for (int i = 0; i < n; ++i) r[i] = Ax[i] - lambdaA * x[i];
 
-        lambdaB_prev = lambdaB;
-
-        //if (it > 0 && pogr < tol)
-          //  break;
+        double relres = norm2(r) / (fabs(lambdaA) + 1e-15);
+        //cout << "relres is " << relres << endl;
+        if (it%1000==0)cout << "lambdaA is " << lambdaA << endl;
+        if (relres < tol) {
+            cout <<"maxLambda iterations " << it <<endl;
+            return lambdaA;
+        }
     }
 
-    return beta - lambdaB;  // λ_min = β - λ_B
+    // если не сошлось,  последнюю оценку
+    Ax = A.matvec(x);
+    return dotp(x, Ax);
 }
 
 // Точное решение
@@ -271,6 +274,78 @@ System buildSystem(double a, double b,
     A.finalize();
     return {A, F};
 }
+vector<double> solveCG(const SparseMatrix& A,
+                       const vector<double>& b,
+                       double tol = 1e-8,
+                       int maxIter = 1000)
+{
+    int n = A.n;
+    vector<double> x(n, 0.0);
+    vector<double> r = b;               // начальная невязка: b - A*0
+    vector<double> p = r;
+    double rsold = dotp(r, r);
+
+    for (int iter = 0; iter < maxIter; ++iter) {
+        vector<double> Ap = A.matvec(p);
+        double pAp = dotp(p, Ap);
+        if (pAp == 0.0) break;
+        double alpha = rsold / pAp;
+
+        for (int i = 0; i < n; ++i) x[i] += alpha * p[i];
+        for (int i = 0; i < n; ++i) r[i] -= alpha * Ap[i];
+
+        double rsnew = dotp(r, r);
+        if (sqrt(rsnew) < tol) break;   // точность достигнута
+
+        double beta = rsnew / rsold;
+        for (int i = 0; i < n; ++i) p[i] = r[i] + beta * p[i];
+        rsold = rsnew;
+    }
+    return x;
+}
+double inverse_power_min(const SparseMatrix& A,
+                         int maxIter = 200,
+                         double tol = 1e-8)
+{
+    int n = A.n;
+    vector<double> x(n, 1.0);
+    normalize(x);
+
+    vector<double> y, Ay;
+    double lambda_prev = 0.0;
+
+    for (int it = 0; it < maxIter; ++it) {
+        y = solveCG(A, x, 1e-10, 2000);
+
+        double ny = norm2(y);
+        if (ny == 0.0) return 0.0;
+
+        // Новый собственный вектор
+        for (int i = 0; i < n; ++i)
+            x[i] = y[i] / ny;
+
+        // Отношение Рэлея для A
+        Ay = A.matvec(x);
+        double lambda = dotp(x, Ay);
+
+        // Невязка
+        vector<double> r(n);
+        for (int i = 0; i < n; ++i)
+            r[i] = Ay[i] - lambda * x[i];
+        double relres = norm2(r) / (fabs(lambda) + 1e-15);
+
+        if (relres < tol){
+                        cout <<"minLambda iterations " << it <<endl;
+            return lambda;
+        }
+
+        lambda_prev = lambda;
+    }
+
+    // Если не сошлось, возвращаем последнюю оценку
+    Ay = A.matvec(x);
+    return dotp(x, Ay);
+}
 
 int main() {
 
@@ -284,16 +359,23 @@ int main() {
     const double ly = 0.0, ry = 1.0;
 
     // Число внутренних узлов
-    const int nx = 999;
-    const int ny = 999;
+    const int nx = 999/2;
+    const int ny = 999/2;
 
     System sys = buildSystem(a, b, lx, rx, ly, ry, nx, ny);
 
     double lambda_max = power_max(sys.A);
-    double lambda_min = power_min_shifted(sys.A,lambda_max);
+auto dt = chrono::steady_clock::now() - t1;
+cout << "lambda max time " 
+     << chrono::duration<double>(dt).count() 
+     << endl;
+         t1=chrono::steady_clock::now();
 
-    auto t2 = chrono::steady_clock::now();
-    chrono::duration<double> elapsed = t2 - t1;
+    double lambda_min = inverse_power_min(sys.A);
+ dt = chrono::steady_clock::now() - t1;
+cout << "lambda min time " 
+     << chrono::duration<double>(dt).count() 
+     << endl;
 
     cout.setf(std::ios::fixed);
     cout << setprecision(15);
@@ -302,7 +384,6 @@ int main() {
     cout << "||A||_inf     = " << sys.A.infNorm() << "\n";
     cout << "lambda_max    = " << lambda_max << "\n";
     cout << "lambda_min    = " << lambda_min << "\n";
-    cout << "time          = " << elapsed.count() << " sec\n";
     compare_with_theory(a, b, lx, rx, ly, ry,
                     nx, ny,
                     lambda_max, lambda_min);
