@@ -195,7 +195,7 @@ double power_min_shifted(const SparseMatrix& A,
         //cout << "relres is " << relres << endl;
         if (it%1000==0)cout << "lambdaA is " << lambdaA << endl;
         if (relres < tol) {
-            cout <<"maxLambda iterations " << it <<endl;
+            cout <<"minLambda iterations " << it <<endl;
             return lambdaA;
         }
     }
@@ -346,24 +346,10 @@ double inverse_power_min(const SparseMatrix& A,
     Ay = A.matvec(x);
     return dotp(x, Ay);
 }
-
-int main() {
-
+void lambda_task(double a, double b, double lx, double rx, double ly, double ry, int nx, int ny,System sys) {
     auto t1 = chrono::steady_clock::now();
-    // Коэффициенты из задачи
-    const double a = 1.1;
-    const double b = 0.8;
-
-    // Область
-    const double lx = 0.0, rx = 1.0;
-    const double ly = 0.0, ry = 1.0;
-
-    // Число внутренних узлов
-    const int nx = 999/2;
-    const int ny = 999/2;
-
-    System sys = buildSystem(a, b, lx, rx, ly, ry, nx, ny);
-
+    
+   // System sys = buildSystem(a, b, lx, rx, ly, ry, nx, ny);
     double lambda_max = power_max(sys.A);
 auto dt = chrono::steady_clock::now() - t1;
 cout << "lambda max time " 
@@ -387,5 +373,65 @@ cout << "lambda min time "
     compare_with_theory(a, b, lx, rx, ly, ry,
                     nx, ny,
                     lambda_max, lambda_min);
+}
+vector<double> richardson(const SparseMatrix& A,
+                          const vector<double>& b,
+                          double tau,
+                          double tol = 1e-8,
+                          int maxIter = 50000)
+{
+    int n = A.n;
+    vector<double> x(n, 0.0);
+    vector<double> r(n);
+    double b_norm = sqrt(dotp(b, b));
+    if (b_norm == 0.0) b_norm = 1.0;
+
+    for (int iter = 0; iter < maxIter; ++iter) {
+        vector<double> Ax = A.matvec(x);
+        for (int i = 0; i < n; ++i)
+            r[i] = b[i] - Ax[i];
+
+        double nr = sqrt(dotp(r, r));
+        if (nr / b_norm < tol) {
+            cout << "Richardson converged in " << iter
+                 << " iterations, rel. residual " << nr / b_norm << endl;
+            break;
+        }
+
+        for (int i = 0; i < n; ++i)
+            x[i] += tau * r[i];
+    }
+    return x;
+}
+
+int main() {
+
+    // Коэффициенты из задачи
+    const double a = 1.1;
+    const double b = 0.8;
+
+    // Область
+    const double lx = 0.0, rx = 1.0;
+    const double ly = 0.0, ry = 1.0;
+
+    // Число внутренних узлов
+    const int nx = 999/2;
+    const int ny = 999/2;
+        System sys = buildSystem(a, b, lx, rx, ly, ry, nx, ny);
+
+    //lambda_task(a, b, lx, rx, ly, ry, nx, ny,sys);
+
+
+    double lambda_min=18.7521866;
+    double lambda_max=1898575.328482334;
+    double tau_opt = 2.0 / (lambda_max + lambda_min);
+cout << "tau_opt = " << tau_opt << endl;
+
+auto t_start = chrono::steady_clock::now();
+vector<double> z = richardson(sys.A, sys.F, tau_opt, 1e-4);
+auto dt_solve = chrono::steady_clock::now() - t_start;
+cout << "Richardson solve time: "
+     << chrono::duration<double>(dt_solve).count() << " sec" << endl;
+
     return 0;
 }
