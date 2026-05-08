@@ -378,7 +378,7 @@ vector<double> richardson(const SparseMatrix& A,
                           const vector<double>& b,
                           double tau,
                           double tol = 1e-5,
-                          int maxIter = 30000)
+                          int maxIter = 300000)
 {
     int n = A.n;
     vector<double> x(n, 0.0);
@@ -395,13 +395,13 @@ vector<double> richardson(const SparseMatrix& A,
         for (int i = 0; i < n; ++i)
             r[i] = b[i] - Ax[i];
 
-        double nr = sqrt(dotp(r, r));
+        nr = sqrt(dotp(r, r));
         if (nr / b_norm < tol) {
             cout << "Richardson converged in " << iter
                  << " iterations, rel. residual " << nr / b_norm << endl;
             break;
         }
-   //     if(iter%100==0) cout << iter << ", residual = " << nr / b_norm << endl;
+        if(iter%10000==0) cout << iter << ", residual = " << nr / b_norm << endl;
         for (int i = 0; i < n; ++i)
             x[i] += tau * r[i];
     }
@@ -425,7 +425,7 @@ int main() {
     const int ny = 999/2;
         System sys = buildSystem(a, b, lx, rx, ly, ry, nx, ny);
 
-    //lambda_task(a, b, lx, rx, ly, ry, nx, ny,sys);
+  //  lambda_task(a, b, lx, rx, ly, ry, nx, ny,sys);
 
 
     double lambda_min=18.7521866;
